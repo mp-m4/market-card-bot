@@ -7,9 +7,6 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 # ---------------- CONFIGURATION ----------------
 DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1550072537877184583/LLpc9TsH7Dc4JUGSrA4l2wmXOA6UNWH3pC4vG6RBWlbw4uZSfVfY3FRsInjEM2cv1WmA"
 
-# Replace '123456789012345678' with your actual @marketLurker Role ID from Discord
-ROLE_PING = "<@&123456789012345678>"  
-
 # MuhRO MarketDB Endpoints
 ACTIVE_VENDING_API = "https://flux.muhro.eu/?module=marketdb&action=api&name=v_vending"
 LAST_SALES_API = "https://flux.muhro.eu/?module=marketdb&action=api&name=vending_last_sales_latest"
@@ -129,7 +126,7 @@ def process_active_listings():
                 print(f"[{timestamp}] 🚨 NEW LISTING: {name} for {total_zeny:,} Zeny")
                 
                 send_discord_alert(
-                    content_text=f"🚨 **NEW MATCHED ITEM LISTED ON MARKET!** {ROLE_PING}",
+                    content_text=f"🚨 **NEW MATCHED ITEM LISTED ON MARKET!**",
                     title=f"👑 {name}",
                     color=15158332,
                     price=total_zeny,
@@ -177,7 +174,7 @@ def process_recent_sales():
                 print(f"[{timestamp}] 💰 ITEM SOLD: {name} for {total_zeny:,} Zeny at {sold_time}")
                 
                 send_discord_alert(
-                    content_text=f"💰 **MATCHED ITEM HAS BEEN SOLD!** {ROLE_PING}",
+                    content_text=f"💰 **MATCHED ITEM HAS BEEN SOLD!**",
                     title=f"💸 SOLD: {name}",
                     color=3066993,
                     price=total_zeny,
