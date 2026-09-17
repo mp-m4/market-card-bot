@@ -19,6 +19,10 @@ PING_DELAY_SECONDS = 2  # Pause in seconds between sending alerts
 alerted_listings = set()
 alerted_sales = set()
 
+# Global flags to control initial silent warm-ups
+is_initial_listings_warmup = True
+is_initial_sales_warmup = True
+
 
 # --- KEEP-ALIVE SERVER FOR RENDER ---
 class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
@@ -91,6 +95,7 @@ def is_watched_item(item_name):
 # --- MARKET CHECKERS ---
 def process_active_listings():
     """Checks for newly listed watched items."""
+    global is_initial_listings_warmup
     timestamp = time.strftime('%H:%M:%S')
     current_datetime = time.strftime('%Y-%m-%d %H:%M:%S')
     headers = {'User-Agent': 'Mozilla/5.0'}
@@ -123,24 +128,33 @@ def process_active_listings():
         if is_watched_item(name):
             current_scan_ids.add(listing_id)
             if listing_id not in alerted_listings:
-                print(f"[{timestamp}] 🚨 NEW LISTING: {name} for {total_zeny:,} Zeny")
+                # If warm-up is false, send real alerts to Discord
+                if not is_initial_listings_warmup:
+                    print(f"[{timestamp}] 🚨 NEW LISTING: {name} for {total_zeny:,} Zeny")
+                    
+                    send_discord_alert(
+                        content_text=f"🚨 **NEW MATCHED ITEM LISTED ON MARKET!**",
+                        title=f"👑 {name}",
+                        color=15158332,
+                        price=total_zeny,
+                        amount=amount,
+                        datetime_str=listing_time
+                    )
+                    time.sleep(PING_DELAY_SECONDS)
                 
-                send_discord_alert(
-                    content_text=f"🚨 **NEW MATCHED ITEM LISTED ON MARKET!**",
-                    title=f"👑 {name}",
-                    color=15158332,
-                    price=total_zeny,
-                    amount=amount,
-                    datetime_str=listing_time
-                )
                 alerted_listings.add(listing_id)
-                time.sleep(PING_DELAY_SECONDS)
 
     alerted_listings.intersection_update(current_scan_ids)
+
+    # Disable warm-up flag after the first completed pass
+    if is_initial_listings_warmup:
+        print(f"[{timestamp}] ✅ Active listings warm-up complete. Cached {len(alerted_listings)} existing listings silently.")
+        is_initial_listings_warmup = False
 
 
 def process_recent_sales():
     """Checks for newly sold watched items."""
+    global is_initial_sales_warmup
     timestamp = time.strftime('%H:%M:%S')
     current_datetime = time.strftime('%Y-%m-%d %H:%M:%S')
     headers = {'User-Agent': 'Mozilla/5.0'}
@@ -171,18 +185,26 @@ def process_recent_sales():
 
         if is_watched_item(name):
             if sale_id not in alerted_sales:
-                print(f"[{timestamp}] 💰 ITEM SOLD: {name} for {total_zeny:,} Zeny at {sold_time}")
+                # If warm-up is false, send real alerts to Discord
+                if not is_initial_sales_warmup:
+                    print(f"[{timestamp}] 💰 ITEM SOLD: {name} for {total_zeny:,} Zeny at {sold_time}")
+                    
+                    send_discord_alert(
+                        content_text=f"💰 **MATCHED ITEM HAS BEEN SOLD!**",
+                        title=f"💸 SOLD: {name}",
+                        color=3066993,
+                        price=total_zeny,
+                        amount=amount,
+                        datetime_str=sold_time
+                    )
+                    time.sleep(PING_DELAY_SECONDS)
                 
-                send_discord_alert(
-                    content_text=f"💰 **MATCHED ITEM HAS BEEN SOLD!**",
-                    title=f"💸 SOLD: {name}",
-                    color=3066993,
-                    price=total_zeny,
-                    amount=amount,
-                    datetime_str=sold_time
-                )
                 alerted_sales.add(sale_id)
-                time.sleep(PING_DELAY_SECONDS)
+
+    # Disable warm-up flag after the first completed pass
+    if is_initial_sales_warmup:
+        print(f"[{timestamp}] ✅ Sales history warm-up complete. Cached {len(alerted_sales)} historical sales silently.")
+        is_initial_sales_warmup = False
 
     if len(alerted_sales) > 500:
         alerted_sales.clear()
