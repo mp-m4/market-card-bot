@@ -5,7 +5,7 @@ import requests
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
 # ---------------- CONFIGURATION ----------------
-DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1550052052816891914/6z7IS44vUNHDbkyXPjGEZaE9ovZZwNMNMMg73cpFw71KOooPi2gOins2bJqAGKL2NmjX"
+DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1550072537877184583/LLpc9TsH7Dc4JUGSrA4l2wmXOA6UNWH3pC4vG6RBWlbw4uZSfVfY3FRsInjEM2cv1WmA"
 
 # Replace '123456789012345678' with your actual @marketLurker Role ID from Discord
 ROLE_PING = "<@&123456789012345678>"  
