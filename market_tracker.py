@@ -11,7 +11,7 @@ DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1550072537877184583/LLpc
 ACTIVE_VENDING_API = "https://flux.muhro.eu/?module=marketdb&action=api&name=v_vending"
 LAST_SALES_API = "https://flux.muhro.eu/?module=marketdb&action=api&name=vending_last_sales_latest"
 
-CHECK_INTERVAL_SECONDS = 300  # 5 minutes
+CHECK_INTERVAL_SECONDS = 300  # 5 minutes check loop
 PING_DELAY_SECONDS = 2  # Pause in seconds between sending alerts
 # -----------------------------------------------
 
@@ -24,12 +24,20 @@ is_initial_listings_warmup = True
 is_initial_sales_warmup = True
 
 
-# --- KEEP-ALIVE SERVER FOR RENDER ---
+# --- KEEP-ALIVE SERVER FOR RENDER & UPTIMEROBOT ---
 class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
+        self.send_header("Content-type", "text/plain")
         self.end_headers()
         self.wfile.write(b"MuhRO Market Bot is active and running!")
+
+    def do_HEAD(self):
+        """Handles HTTP HEAD requests from UptimeRobot to avoid 501 errors."""
+        self.send_response(200)
+        self.send_header("Content-type", "text/plain")
+        self.end_headers()
+
 
 def run_web_server():
     port = int(os.environ.get("PORT", 10000))
@@ -76,7 +84,7 @@ def send_discord_alert(content_text, title, color, price, amount, datetime_str):
 
 
 def parse_zeny(raw_price, currency="zeny"):
-    """Parses Zeny values safely from numbers or strings."""
+    """Parses Zeny values safely from numbers, string formats, or Flux notations."""
     if raw_price is None:
         return 0
     try:
