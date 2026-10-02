@@ -171,8 +171,9 @@ def process_recent_sales():
 
     for sale in sales:
         name = sale.get("name") or sale.get("item_name") or ""
-        total_zeny = parse_zeny(sale.get("price"), sale.get("currency"))
-        amount = sale.get("amount") or sale.get("count") or 1
+        
+        # Extract corrected total zeny and exact sold quantity
+        total_zeny, amount = parse_sale_data(sale)
         
         sold_time = (
             sale.get("date") or 
@@ -181,27 +182,26 @@ def process_recent_sales():
             current_datetime
         )
 
+        # Unique Sale ID incorporating name, amount, total price, and timestamp
         sale_id = f"{name}-{total_zeny}-{amount}-{sold_time}"
 
         if is_watched_item(name):
             if sale_id not in alerted_sales:
-                # If warm-up is false, send real alerts to Discord
                 if not is_initial_sales_warmup:
-                    print(f"[{timestamp}] 💰 ITEM SOLD: {name} for {total_zeny:,} Zeny at {sold_time}")
+                    print(f"[{timestamp}] 💰 ITEM SOLD: {name} (x{amount}) for {total_zeny:,} Zeny at {sold_time}")
                     
                     send_discord_alert(
                         content_text=f"💰 **MATCHED ITEM HAS BEEN SOLD!**",
                         title=f"💸 SOLD: {name}",
                         color=3066993,
                         price=total_zeny,
-                        amount=amount,
+                        amount=amount,  # Now correctly passes x1, x2, x10, etc.
                         datetime_str=sold_time
                     )
                     time.sleep(PING_DELAY_SECONDS)
                 
                 alerted_sales.add(sale_id)
 
-    # Disable warm-up flag after the first completed pass
     if is_initial_sales_warmup:
         print(f"[{timestamp}] ✅ Sales history warm-up complete. Cached {len(alerted_sales)} historical sales silently.")
         is_initial_sales_warmup = False
