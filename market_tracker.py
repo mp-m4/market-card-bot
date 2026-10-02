@@ -11,7 +11,7 @@ DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1550072537877184583/LLpc
 ACTIVE_VENDING_API = "https://flux.muhro.eu/?module=marketdb&action=api&name=v_vending"
 LAST_SALES_API = "https://flux.muhro.eu/?module=marketdb&action=api&name=vending_last_sales_latest"
 
-CHECK_INTERVAL_SECONDS = 60
+CHECK_INTERVAL_SECONDS = 300  # Set to 300s (5 mins) to align with UptimeRobot
 PING_DELAY_SECONDS = 2  # Pause in seconds between sending alerts
 # -----------------------------------------------
 
@@ -60,7 +60,7 @@ def send_discord_alert(content_text, title, color, price, amount, datetime_str):
         try:
             response = requests.post(DISCORD_WEBHOOK_URL, json=payload, timeout=10)
             
-            if response.status_code == 204:
+            if response.status_code in (200, 204):
                 print(f"[{time.strftime('%H:%M:%S')}] Discord alert sent successfully.")
                 break
             elif response.status_code == 429:
@@ -84,6 +84,41 @@ def parse_zeny(raw_price, currency):
         return parsed
     except ValueError:
         return 0
+
+
+def parse_sale_data(sale_dict):
+    """
+    Safely extracts price and quantity for sold items.
+    Handles unit prices vs total prices and varying quantity key names.
+    """
+    amount = 1
+    for key in ["amount", "count", "qty", "quantity", "num"]:
+        val = sale_dict.get(key)
+        if val is not None:
+            try:
+                parsed_val = int(str(val).replace(",", ""))
+                if parsed_val > 0:
+                    amount = parsed_val
+                    break
+            except ValueError:
+                pass
+
+    raw_price = (
+        sale_dict.get("total_price") or 
+        sale_dict.get("price") or 
+        sale_dict.get("zeny") or 
+        0
+    )
+    
+    currency = sale_dict.get("currency", "zeny")
+    total_zeny = parse_zeny(raw_price, currency)
+
+    if "unit_price" in sale_dict and not sale_dict.get("total_price"):
+        unit_price = parse_zeny(sale_dict.get("unit_price"), currency)
+        if unit_price > 0:
+            total_zeny = unit_price * amount
+
+    return total_zeny, amount
 
 
 def is_watched_item(item_name):
@@ -128,12 +163,11 @@ def process_active_listings():
         if is_watched_item(name):
             current_scan_ids.add(listing_id)
             if listing_id not in alerted_listings:
-                # If warm-up is false, send real alerts to Discord
                 if not is_initial_listings_warmup:
                     print(f"[{timestamp}] 🚨 NEW LISTING: {name} for {total_zeny:,} Zeny")
                     
                     send_discord_alert(
-                        content_text=f"🚨 **NEW MATCHED ITEM LISTED ON MARKET!**",
+                        content_text="🚨 **NEW MATCHED ITEM LISTED ON MARKET!**",
                         title=f"👑 {name}",
                         color=15158332,
                         price=total_zeny,
@@ -146,7 +180,6 @@ def process_active_listings():
 
     alerted_listings.intersection_update(current_scan_ids)
 
-    # Disable warm-up flag after the first completed pass
     if is_initial_listings_warmup:
         print(f"[{timestamp}] ✅ Active listings warm-up complete. Cached {len(alerted_listings)} existing listings silently.")
         is_initial_listings_warmup = False
@@ -171,8 +204,6 @@ def process_recent_sales():
 
     for sale in sales:
         name = sale.get("name") or sale.get("item_name") or ""
-        
-        # Extract corrected total zeny and exact sold quantity
         total_zeny, amount = parse_sale_data(sale)
         
         sold_time = (
@@ -182,7 +213,6 @@ def process_recent_sales():
             current_datetime
         )
 
-        # Unique Sale ID incorporating name, amount, total price, and timestamp
         sale_id = f"{name}-{total_zeny}-{amount}-{sold_time}"
 
         if is_watched_item(name):
@@ -191,11 +221,11 @@ def process_recent_sales():
                     print(f"[{timestamp}] 💰 ITEM SOLD: {name} (x{amount}) for {total_zeny:,} Zeny at {sold_time}")
                     
                     send_discord_alert(
-                        content_text=f"💰 **MATCHED ITEM HAS BEEN SOLD!**",
+                        content_text="💰 **MATCHED ITEM HAS BEEN SOLD!**",
                         title=f"💸 SOLD: {name}",
                         color=3066993,
                         price=total_zeny,
-                        amount=amount,  # Now correctly passes x1, x2, x10, etc.
+                        amount=amount,
                         datetime_str=sold_time
                     )
                     time.sleep(PING_DELAY_SECONDS)
@@ -218,10 +248,8 @@ if __name__ == "__main__":
     print(f" Ping delay set to {PING_DELAY_SECONDS} seconds per alert.")
     print("==================================================")
     
-    # 1. Start the keep-alive web server on a background thread for Render
     threading.Thread(target=run_web_server, daemon=True).start()
 
-    # 2. Infinite market monitoring loop
     while True:
         process_active_listings()
         process_recent_sales()
