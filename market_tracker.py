@@ -11,7 +11,7 @@ DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1550072537877184583/LLpc
 ACTIVE_VENDING_API = "https://flux.muhro.eu/?module=marketdb&action=api&name=v_vending"
 LAST_SALES_API = "https://flux.muhro.eu/?module=marketdb&action=api&name=vending_last_sales_latest"
 
-CHECK_INTERVAL_SECONDS = 300  # Set to 300s (5 mins) to align with UptimeRobot
+CHECK_INTERVAL_SECONDS = 300  # 5 minutes
 PING_DELAY_SECONDS = 2  # Pause in seconds between sending alerts
 # -----------------------------------------------
 
@@ -75,45 +75,51 @@ def send_discord_alert(content_text, title, color, price, amount, datetime_str):
             break
 
 
-def parse_zeny(raw_price, currency):
-    """Parses Zeny values safely."""
+def parse_zeny(raw_price, currency="zeny"):
+    """Parses Zeny values safely from numbers or strings."""
+    if raw_price is None:
+        return 0
     try:
-        parsed = int(str(raw_price).replace(",", ""))
-        if "1m" in str(currency).lower() or (parsed < 1000000 and "zeny" not in str(currency).lower()):
+        clean_str = str(raw_price).replace(",", "").strip()
+        parsed = int(float(clean_str))
+        
+        if "1m" in str(currency).lower() or (parsed < 1000000 and "zeny" not in str(currency).lower() and parsed > 0):
             return parsed * 1000000
         return parsed
-    except ValueError:
+    except (ValueError, TypeError):
         return 0
 
 
 def parse_sale_data(sale_dict):
-    """
-    Safely extracts price and quantity for sold items.
-    Handles unit prices vs total prices and varying quantity key names.
-    """
+    """Safely extracts price and quantity for sold items across all possible API keys."""
+    # 1. Extract Quantity
     amount = 1
     for key in ["amount", "count", "qty", "quantity", "num"]:
         val = sale_dict.get(key)
         if val is not None:
             try:
-                parsed_val = int(str(val).replace(",", ""))
+                parsed_val = int(str(val).replace(",", "").strip())
                 if parsed_val > 0:
                     amount = parsed_val
                     break
             except ValueError:
                 pass
 
+    # 2. Extract Price across potential Flux market keys
     raw_price = (
-        sale_dict.get("total_price") or 
         sale_dict.get("price") or 
+        sale_dict.get("total_price") or 
+        sale_dict.get("cost") or 
+        sale_dict.get("total") or 
         sale_dict.get("zeny") or 
+        sale_dict.get("unit_price") or
         0
     )
-    
-    currency = sale_dict.get("currency", "zeny")
+
+    currency = sale_dict.get("currency") or sale_dict.get("type") or "zeny"
     total_zeny = parse_zeny(raw_price, currency)
 
-    if "unit_price" in sale_dict and not sale_dict.get("total_price"):
+    if sale_dict.get("unit_price") and not (sale_dict.get("price") or sale_dict.get("total_price")):
         unit_price = parse_zeny(sale_dict.get("unit_price"), currency)
         if unit_price > 0:
             total_zeny = unit_price * amount
@@ -149,8 +155,18 @@ def process_active_listings():
     for item in items:
         name = item.get("name") or item.get("item_name") or ""
         total_zeny = parse_zeny(item.get("price"), item.get("currency"))
-        amount = item.get("amount") or item.get("count") or 1
         
+        # Quantity extraction for active listings
+        amount = 1
+        for key in ["amount", "count", "qty", "quantity"]:
+            val = item.get(key)
+            if val is not None:
+                try:
+                    amount = int(str(val).replace(",", "").strip())
+                    break
+                except ValueError:
+                    pass
+
         listing_time = (
             item.get("date") or 
             item.get("created_at") or 
@@ -164,7 +180,7 @@ def process_active_listings():
             current_scan_ids.add(listing_id)
             if listing_id not in alerted_listings:
                 if not is_initial_listings_warmup:
-                    print(f"[{timestamp}] 🚨 NEW LISTING: {name} for {total_zeny:,} Zeny")
+                    print(f"[{timestamp}] 🚨 NEW LISTING: {name} (x{amount}) for {total_zeny:,} Zeny")
                     
                     send_discord_alert(
                         content_text="🚨 **NEW MATCHED ITEM LISTED ON MARKET!**",
