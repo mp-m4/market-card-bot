@@ -6,6 +6,7 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 
 # ---------------- CONFIGURATION ----------------
 DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1550072537877184583/LLpc9TsH7Dc4JUGSrA4l2wmXOA6UNWH3pC4vG6RBWlbw4uZSfVfY3FRsInjEM2cv1WmA"
+DISCORD_WEBHOOK = "https://discord.com/api/webhooks/1560251771195105401/Sc8-5GrTpvEhkREtKntFXXfiP4M2IVCIxfHwtj0_fUvhaMghL_B3mqIwdxPxddvACpqg"
 
 # MuhRO MarketDB Endpoints
 ACTIVE_VENDING_API = "https://flux.muhro.eu/?module=marketdb&action=api&name=v_vending"
