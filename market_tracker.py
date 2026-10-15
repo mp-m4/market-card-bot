@@ -48,7 +48,7 @@ def run_web_server():
 
 # --- HELPER FUNCTIONS ---
 def send_discord_alert(content_text, title, color, price, amount, datetime_str):
-    """Sends a formatted embed message to Discord with Rate Limit protection."""
+    """Sends a formatted embed message to both Discord webhooks with Rate Limit protection."""
     payload = {
         "content": content_text,
         "embeds": [
@@ -65,23 +65,26 @@ def send_discord_alert(content_text, title, color, price, amount, datetime_str):
         ]
     }
     
-    while True:
-        try:
-            response = requests.post(DISCORD_WEBHOOK_URL, json=payload, timeout=10)
-            
-            if response.status_code in (200, 204):
-                print(f"[{time.strftime('%H:%M:%S')}] Discord alert sent successfully.")
+    webhooks = [url for url in [DISCORD_WEBHOOK_1, DISCORD_WEBHOOK_2] if url.strip()]
+
+    for webhook_url in webhooks:
+        while True:
+            try:
+                response = requests.post(webhook_url, json=payload, timeout=10)
+                
+                if response.status_code in (200, 204):
+                    print(f"[{time.strftime('%H:%M:%S')}] Discord alert sent successfully.")
+                    break
+                elif response.status_code == 429:
+                    retry_after = response.json().get("retry_after", 2)
+                    print(f"[{time.strftime('%H:%M:%S')}] Rate limited by Discord. Retrying in {retry_after}s...")
+                    time.sleep(retry_after)
+                else:
+                    print(f"[{time.strftime('%H:%M:%S')}] Discord HTTP Error: {response.status_code}")
+                    break
+            except Exception as e:
+                print(f"[{time.strftime('%H:%M:%S')}] Failed to post to Discord: {e}")
                 break
-            elif response.status_code == 429:
-                retry_after = response.json().get("retry_after", 2)
-                print(f"[{time.strftime('%H:%M:%S')}] Rate limited by Discord. Retrying in {retry_after}s...")
-                time.sleep(retry_after)
-            else:
-                print(f"[{time.strftime('%H:%M:%S')}] Discord HTTP Error: {response.status_code}")
-                break
-        except Exception as e:
-            print(f"[{time.strftime('%H:%M:%S')}] Failed to post to Discord: {e}")
-            break
 
 
 def parse_zeny(raw_price, currency="zeny"):
@@ -101,7 +104,6 @@ def parse_zeny(raw_price, currency="zeny"):
 
 def parse_sale_data(sale_dict):
     """Safely extracts price and quantity for sold items across all possible API keys."""
-    # 1. Extract Quantity
     amount = 1
     for key in ["amount", "count", "qty", "quantity", "num"]:
         val = sale_dict.get(key)
@@ -114,7 +116,6 @@ def parse_sale_data(sale_dict):
             except ValueError:
                 pass
 
-    # 2. Extract Price across potential Flux market keys
     raw_price = (
         sale_dict.get("price") or 
         sale_dict.get("total_price") or 
@@ -165,7 +166,6 @@ def process_active_listings():
         name = item.get("name") or item.get("item_name") or ""
         total_zeny = parse_zeny(item.get("price"), item.get("currency"))
         
-        # Quantity extraction for active listings
         amount = 1
         for key in ["amount", "count", "qty", "quantity"]:
             val = item.get(key)
